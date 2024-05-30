@@ -16,6 +16,7 @@ configs.train.batch_size = 128
 # optimizer
 configs.train.optimizer.lr = 0.1
 configs.train.optimizer.weight_decay = 1e-4
+configs.train.optimize_bn_separately = False
 
 # scheduler
 configs.train.scheduler = Config(torch.optim.lr_scheduler.CosineAnnealingLR)
