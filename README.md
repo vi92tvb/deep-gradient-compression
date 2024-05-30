@@ -9,6 +9,17 @@
 }
 ```
 
+## Note
+Macos must install libuv & tensorflow-macos & pkg-config first
+```
+g++ --version
+    Configured with: --prefix=/Library/Developer/CommandLineTools/usr --with-gxx-include-dir=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/4.2.1
+    Apple clang version 12.0.5 (clang-1205.0.22.11)
+    Target: arm64-apple-darwin20.6.0
+    Thread model: posix
+    InstalledDir: /Library/Developer/CommandLineTools/usr/bin
+```
+
 ## Overview
 
 We release the PyTorch code of the [Deep Gradient Compression](https://arxiv.org/pdf/1712.01887.pdf).
