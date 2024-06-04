@@ -1,3 +1,0 @@
-[submodule "torchpack"]
-	path = torchpack
-	url = https://github.com/synxlin/mini-torchpack.git
