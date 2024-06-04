@@ -1,5 +1,9 @@
-torch
-horovod
+torch==1.11.0
+# git+https://github.com/thomas-bouvier/horovod.git@compile-cpp17
 tensorboardX
 numpy
 tqdm
+torchvision
+# scikit-learn
+tensorflow-macos
+horovod

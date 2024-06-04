@@ -1,13 +1,13 @@
 import torch
 
-from torchpack.mtpack.datasets.vision import CIFAR
+from torchpack.mtpack.datasets.vision import VietnameseImage
 from torchpack.mtpack.utils.config import Config, configs
 
 # dataset
-configs.dataset = Config(CIFAR)
-configs.dataset.root = './data/cifar10'
+configs.dataset = Config(VietnameseImage)
+configs.dataset.root = './data/vietnameseimage'
 configs.dataset.num_classes = 10
-configs.dataset.image_size = 32
+configs.dataset.image_size = 64
 
 # training
 configs.train.num_epochs = 200
