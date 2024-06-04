@@ -9,8 +9,10 @@
 }
 ```
 
-## Note
+## Note for MACOS
 Macos must install libuv & tensorflow-macos & pkg-config first
+Imagenet dataset: `curl -O https://image-net.org/data/ILSVRC/2012/ILSVRC2012_devkit_t12.tar.gz``
+HOROVOD_WITH_PYTORCH=1 pip install --no-cache-dir horovod  
 ```
 g++ --version
     Configured with: --prefix=/Library/Developer/CommandLineTools/usr --with-gxx-include-dir=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/4.2.1
