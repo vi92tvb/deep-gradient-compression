@@ -1,7 +1,7 @@
 import torchvision.transforms as transforms
 from torchvision.datasets import ImageFolder
 from torch.utils.data import Subset
-
+from typing import Dict, Any
 from ..dataset import Dataset
 from .utils import split_train_val_indices
 
@@ -53,12 +53,9 @@ class VietnameseImage(Dataset):
             val_dataset = Subset(ImageFolder(root=root, transform=test_transforms), indices=val_indices)
             super().__init__(train=train_dataset, val=val_dataset, test=test_dataset)
             self.dataset_dict = {'train': train_dataset, 'test': test_dataset, 'val': val_dataset} 
-        
-    # def __getitem__(self, index):
-    #     return self.dataset[index]
 
-    def __len__(self, key):
-        return len(self.dataset_dict[key])
+    def __len__(self):
+        return len(self.dataset_dict)
 
     def __getitem__(self, key):
         return self.dataset_dict[key]
