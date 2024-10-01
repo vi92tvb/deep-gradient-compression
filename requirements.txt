@@ -5,6 +5,7 @@ numpy
 tqdm
 torchvision==0.12.0
 torchtext==0.12.0
+torchaudio==0.11.0 
 
 # scikit-learn
 tensorflow-macos
@@ -12,3 +13,4 @@ horovod
 pandas
 regex
 underthesea
+jiwer
