@@ -4,22 +4,38 @@ import pandas as pd
 from tqdm import tqdm
 tqdm.pandas()
 import regex as re
-import string
+from torch.nn.utils.rnn import pad_sequence
 import underthesea
 from collections import Counter
 import numpy as np
 from torch.utils.data import TensorDataset
 import torch
+import torchtext.vocab as vocab
+from underthesea import word_tokenize
+import torch.nn.utils.rnn as rnn_utils
+from underthesea import word_tokenize
+
 
 __all__ = ['VietnameseText']
 
 class VietnameseText(Dataset):
     def __init__(self, root):
         self.root = root
+        self.vocab = Vocabulary()
+        self.pad_idx = self.vocab["<pad>"]
+
         dataset_dict = {'train': [], 'test': [], 'val': []}
 
         folder_order = ['train', 'test', 'val']
-        vocab = {'<PAD>': 0, '<UNK>': 1}
+
+        word_embedding = vocab.Vectors(name = "vi_word2vec.txt",
+                               unk_init = torch.Tensor.normal_)
+
+        words_list = list(word_embedding.stoi.keys())
+
+        # Limit word, not enough space
+        for word in words_list[:4000]:
+            self.vocab.add(word)
         
         for subdir in folder_order:
             subdir_path = os.path.join(root, subdir)
@@ -53,24 +69,6 @@ class VietnameseText(Dataset):
 
                 dataset_dict[subdir] = data
 
-                if subdir == "train":
-                    data['sentiment'] = data['label'].progress_apply(transform_label)
-                    data['processed'] = data['text'].progress_apply(clean_document)
-        
-                    reviews = data['processed'].values
-                    reviews = [' '.join(review) for review in reviews]  # Join tokens to form the processed sentences
-                    words = ' '.join(reviews)
-                    words = words.split()
-
-                    # Create vocabulary and word to index mappings
-                    all_words = ' '.join(reviews).split()
-                    counter = Counter(all_words)
-                    vocab = sorted(counter, key=counter.get, reverse=True)
-                    int2word = {i + 2: word for i, word in enumerate(vocab)}
-                    int2word[0] = '<PAD>'
-                    int2word[1] = '<UNK>'
-                    self.word2int = {word: id for id, word in int2word.items()}
-
         super().__init__(train=dataset_dict['train'], val=dataset_dict['val'], test=dataset_dict['test'])
         self.dataset_dict = {'train': dataset_dict['train'], 'test': dataset_dict['test'], 'val': dataset_dict['val']} 
 
@@ -80,16 +78,34 @@ class VietnameseText(Dataset):
     def __getitem__(self, index):
         data = self.dataset_dict[index]
         data['sentiment'] = data['label'].progress_apply(transform_label)
-        data['processed'] = data['text'].progress_apply(clean_document)
-        reviews = data['processed'].values
-        reviews = [' '.join(review) for review in reviews]
+        data['processed'] = self.vocab.tokenize_corpus(data['text'])
+        labels = torch.tensor(data['label'].to_numpy(), dtype=torch.long)
 
-        reviews_enc = [[self.word2int.get(word, self.word2int['<UNK>']) for word in review.split()] for review in tqdm(reviews)]
-        seq_length = 256
-        features = pad_features(reviews_enc, pad_id=self.word2int['<PAD>'], seq_length=seq_length)
-        labels = data['label'].to_numpy()
-        dataset = TensorDataset(torch.tensor(features, dtype=torch.long), torch.tensor(labels, dtype=torch.long))
-        return dataset
+        # max_length = max(len(doc) for doc in tensor_data)  # tìm chiều dài lớn nhất
+        # padded_corpus = []
+
+        # for doc in tensor_data:
+        #     # Padding các tài liệu đến chiều dài max_length
+        #     if len(doc) < max_length:
+        #         padding = torch.full((max_length - len(doc),), -1)  # -1 là chỉ số padding
+        #         padded_doc = torch.cat((doc, padding))
+        #     else:
+        #         padded_doc = doc
+        #     padded_corpus.append(padded_doc)
+
+        # # Chuyển đổi danh sách các tensor thành một tensor 2D
+        # input_tensor = torch.stack(padded_corpus)
+
+        # Tạo TensorDataset
+        # dataset = TensorDataset(input_tensor, labels)
+    
+        tensor_data = self.vocab.corpus_to_tensor(data['processed'], is_tokenized=True)
+
+        padded_corpus = pad_sequence(tensor_data, batch_first=True, padding_value=self.pad_idx)
+
+        result = TensorDataset(padded_corpus, labels)
+
+        return result
 
 
 def build_vocab(data):
@@ -141,3 +157,112 @@ def clean_document(doc):
     tokens = [token.lower().replace(" ", "_") for token in tokens]
     tokens = [word for word in tokens if word]
     return tokens
+
+class Vocabulary:
+    """ The Vocabulary class is used to record words, which are used to convert
+        text to numbers and vice versa.
+    """
+
+    def __init__(self):
+        self.word2id = dict()
+        self.word2id['<pad>'] = 0   # Pad Token
+        self.word2id['<unk>'] = 1   # Unknown Token
+        self.unk_id = self.word2id['<unk>']
+        self.id2word = {v: k for k, v in self.word2id.items()}
+
+    def __getitem__(self, word):
+        return self.word2id.get(word, self.unk_id)
+
+    def __contains__(self, word):
+        return word in self.word2id
+
+    def __len__(self):
+        return len(self.word2id)
+
+    def id2word(self, word_index):
+        """
+        @param word_index (int)
+        @return word (str)
+        """
+        return self.id2word[word_index]
+
+    def add(self, word):
+        """ Add word to vocabulary
+        @param word (str)
+        @return index (str): index of the word just added
+        """
+        if word not in self:
+            word_index = self.word2id[word] = len(self.word2id)
+            self.id2word[word_index] = word
+            return word_index
+        else:
+            return self[word]
+
+    @staticmethod
+    def tokenize_corpus(corpus):
+        """Split the documents of the corpus into words
+        @param corpus (list(str)): list of documents
+        @return tokenized_corpus (list(list(str))): list of words
+        """
+        print("Tokenize the corpus...")
+        if isinstance(corpus, np.ndarray):
+            corpus = corpus.tolist()
+            print("yes")
+        tokenized_corpus = list()
+        for document in tqdm(corpus):
+            tokenized_document = [word.replace(" ", "_") for word in word_tokenize(document)]
+            tokenized_corpus.append(tokenized_document)
+
+        return tokenized_corpus
+
+    def corpus_to_tensor(self, corpus, is_tokenized=False):
+        """ Convert corpus to a list of indices tensor
+        @param corpus (list(str) if is_tokenized==False else list(list(str)))
+        @param is_tokenized (bool)
+        @return indicies_corpus (list(tensor))
+        """
+        if is_tokenized:
+            tokenized_corpus = corpus
+        else:
+            tokenized_corpus = self.tokenize_corpus(corpus)
+        indicies_corpus = list()
+        for document in tqdm(tokenized_corpus):
+            indicies_document = torch.tensor(list(map(lambda word: self[word], document)),
+                                             dtype=torch.int64)
+            indicies_corpus.append(indicies_document)
+
+        return indicies_corpus
+
+    def tensor_to_corpus(self, tensor):
+        """ Convert list of indices tensor to a list of tokenized documents
+        @param indicies_corpus (list(tensor))
+        @return corpus (list(list(str)))
+        """
+        corpus = list()
+        for indicies in tqdm(tensor):
+            document = list(map(lambda index: self.id2word[index.item()], indicies))
+            corpus.append(document)
+
+        return corpus
+
+def get_vector(embeddings, word):
+    """ Get embedding vector of the word
+    @param embeddings (torchtext.vocab.vectors.Vectors)
+    @param word (str)
+    @return vector (torch.Tensor)
+    """
+    assert word in embeddings.stoi, f'*{word}* is not in the vocab!'
+    return embeddings.vectors[embeddings.stoi[word]]
+
+def closest_words(embeddings, vector, n=10):
+    """ Return n words closest in meaning to the word
+    @param embeddings (torchtext.vocab.vectors.Vectors)
+    @param vector (torch.Tensor)
+    @param n (int)
+    @return words (list(tuple(str, float)))
+    """
+    distances = [(word, torch.dist(vector, get_vector(embeddings, word)).item())
+                 for word in embeddings.itos]
+
+    return sorted(distances, key = lambda w: w[1])[:n]
+

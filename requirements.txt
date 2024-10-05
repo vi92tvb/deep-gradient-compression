@@ -4,6 +4,7 @@ tensorboardX
 numpy
 tqdm
 torchvision==0.12.0
+torchtext==0.12.0
 
 # torchtext
 # scikit-learn
