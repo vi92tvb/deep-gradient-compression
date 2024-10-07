@@ -5,8 +5,8 @@ from torchpack.mtpack.utils.config import Config, configs
 
 # dataset
 configs.dataset = Config(VietnameseImage)
-configs.dataset.root = './data/vietnameseimage'
-configs.dataset.num_classes = 10
+configs.dataset.root = './data/Images'
+configs.dataset.num_classes = 30
 configs.dataset.image_size = 64
 
 # training
