@@ -36,26 +36,26 @@ class VietnameseImage(Dataset):
         test_transforms = transforms.Compose(test_transforms)
 
         # Load the dataset using ImageFolder
-        train_dataset = ImageFolder(root=root, transform=train_transforms)
-        test_dataset = ImageFolder(root=root, transform=test_transforms)
+        train_dataset = ImageFolder(root=root + "/Train", transform=train_transforms)
+        test_dataset = ImageFolder(root=root + "/Test", transform=test_transforms)
         
         if val_ratio is None:
             super().__init__(train=train_dataset, test=test_dataset)
             self.dataset_dict = {'train': train_dataset, 'test': test_dataset} 
         else:
             # Split the dataset into training and validation sets
-            train_indices, val_indices = split_train_val_indices(
-                targets=[label for _, label in train_dataset.samples], 
-                val_ratio=val_ratio, 
-                num_classes=len(train_dataset.classes)
-            )
-            train_dataset = Subset(train_dataset, indices=train_indices)
-            val_dataset = Subset(ImageFolder(root=root, transform=test_transforms), indices=val_indices)
+            # train_indices, val_indices = split_train_val_indices(
+            #     targets=[label for _, label in train_dataset.samples], 
+            #     val_ratio=val_ratio, 
+            #     num_classes=len(train_dataset.classes)
+            # )
+            # train_dataset = Subset(train_dataset, indices=train_indices)
+            val_dataset = ImageFolder(root=root + "/Validate", transform=test_transforms)
             super().__init__(train=train_dataset, val=val_dataset, test=test_dataset)
             self.dataset_dict = {'train': train_dataset, 'test': test_dataset, 'val': val_dataset} 
 
     def __len__(self):
-        return len(self.dataset_dict)
+        return sum(len(self.dataset_dict[key]) for key in self.dataset_dict)
 
     def __getitem__(self, key):
         return self.dataset_dict[key]
