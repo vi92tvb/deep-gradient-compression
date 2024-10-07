@@ -6,13 +6,10 @@ tqdm.pandas()
 import regex as re
 from torch.nn.utils.rnn import pad_sequence
 import underthesea
-from collections import Counter
 import numpy as np
 from torch.utils.data import TensorDataset
 import torch
 import torchtext.vocab as vocab
-from underthesea import word_tokenize
-import torch.nn.utils.rnn as rnn_utils
 from underthesea import word_tokenize
 
 
@@ -34,9 +31,9 @@ class VietnameseText(Dataset):
         words_list = list(word_embedding.stoi.keys())
 
         # Limit word, not enough space
-        for word in words_list[:4000]:
+        for word in words_list[:1587507]:
             self.vocab.add(word)
-        
+
         for subdir in folder_order:
             subdir_path = os.path.join(root, subdir)
             if os.path.isdir(subdir_path):
@@ -67,57 +64,20 @@ class VietnameseText(Dataset):
                 # Drop rows where 'text' or 'label' is empty
                 data = data[(data['text'].str.strip() != '') & (data['label'].notna())]
 
-                dataset_dict[subdir] = data
+                data['sentiment'] = data['label'].progress_apply(transform_label)
+                data['processed'] = self.vocab.tokenize_corpus(data['text'])
+                labels = torch.tensor(data['label'].to_numpy(), dtype=torch.long)
+            
+                tensor_data = self.vocab.corpus_to_tensor(data['processed'], is_tokenized=True)
+
+                padded_corpus = pad_sequence(tensor_data, batch_first=True, padding_value=self.pad_idx)
+
+                result = TensorDataset(padded_corpus, labels)
+
+                dataset_dict[subdir] = result
 
         super().__init__(train=dataset_dict['train'], val=dataset_dict['val'], test=dataset_dict['test'])
         self.dataset_dict = {'train': dataset_dict['train'], 'test': dataset_dict['test'], 'val': dataset_dict['val']} 
-
-    def __len__(self):
-        return sum(len(self.dataset_dict[key]) for key in self.dataset_dict)
-
-    def __getitem__(self, index):
-        data = self.dataset_dict[index]
-        data['sentiment'] = data['label'].progress_apply(transform_label)
-        data['processed'] = self.vocab.tokenize_corpus(data['text'])
-        labels = torch.tensor(data['label'].to_numpy(), dtype=torch.long)
-
-        # max_length = max(len(doc) for doc in tensor_data)  # tìm chiều dài lớn nhất
-        # padded_corpus = []
-
-        # for doc in tensor_data:
-        #     # Padding các tài liệu đến chiều dài max_length
-        #     if len(doc) < max_length:
-        #         padding = torch.full((max_length - len(doc),), -1)  # -1 là chỉ số padding
-        #         padded_doc = torch.cat((doc, padding))
-        #     else:
-        #         padded_doc = doc
-        #     padded_corpus.append(padded_doc)
-
-        # # Chuyển đổi danh sách các tensor thành một tensor 2D
-        # input_tensor = torch.stack(padded_corpus)
-
-        # Tạo TensorDataset
-        # dataset = TensorDataset(input_tensor, labels)
-    
-        tensor_data = self.vocab.corpus_to_tensor(data['processed'], is_tokenized=True)
-
-        padded_corpus = pad_sequence(tensor_data, batch_first=True, padding_value=self.pad_idx)
-
-        result = TensorDataset(padded_corpus, labels)
-
-        return result
-
-
-def build_vocab(data):
-  """
-  Builds vocabulary from the text data.
-  """
-  word_counts = Counter()
-  for text in data['text']:
-    word_counts.update(text.split())
-  vocab = {'<PAD>': 0, '<UNK>': 1}
-  vocab.update({word: i for i, (word, count) in enumerate(word_counts.most_common())})
-  return vocab
 
 def transform_label(label):
     if label == 0: return 'neg'
@@ -151,12 +111,6 @@ def preprocess_text(text):
     
     return text
 
-def clean_document(doc):
-    doc.lower()
-    tokens = underthesea.word_tokenize(doc) #Pyvi Vitokenizer library
-    tokens = [token.lower().replace(" ", "_") for token in tokens]
-    tokens = [word for word in tokens if word]
-    return tokens
 
 class Vocabulary:
     """ The Vocabulary class is used to record words, which are used to convert
@@ -207,7 +161,6 @@ class Vocabulary:
         print("Tokenize the corpus...")
         if isinstance(corpus, np.ndarray):
             corpus = corpus.tolist()
-            print("yes")
         tokenized_corpus = list()
         for document in tqdm(corpus):
             tokenized_document = [word.replace(" ", "_") for word in word_tokenize(document)]

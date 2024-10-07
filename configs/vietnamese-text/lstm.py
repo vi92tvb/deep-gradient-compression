@@ -3,9 +3,9 @@ from torchpack.mtpack.models.vision.lstm import LSTM
 
 # LSTM model config
 configs.model = Config(LSTM)
-configs.model.vocab_size = 4002  # Số lượng từ trong từ điển
-configs.model.embedding_size = 100  # Kích thước của vectơ embedding
-configs.model.hidden_size = 150  # Số lượng đơn vị ẩn trong mỗi tầng LSTM
-configs.model.n_layers = 2  # Số lượng tầng LSTM
+configs.model.vocab_size = 1587509
+configs.model.embedding_size = 100
+configs.model.hidden_size = 1500
+configs.model.n_layers = 2
 configs.model.output_size = 3
-configs.model.dropout=0.5
+configs.model.dropout=0.2

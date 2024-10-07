@@ -13,6 +13,7 @@ class TopKClassMeter(Meter):
         self.num_correct = 0
 
     def update(self, outputs, targets):
+        self.k = min(self.k, outputs.size(-1))
         _, indices = outputs.topk(self.k, 1, True, True)
 
         indices = indices.transpose(0, 1)
