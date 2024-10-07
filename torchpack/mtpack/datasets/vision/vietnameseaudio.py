@@ -43,36 +43,34 @@ class VietnameseAudio(Dataset):
 
                     unique_genders = list(set(genders.values()))
                     self.gender_encoder.fit(unique_genders)
+        dataset_dict['train'] = tensor_data(dataset_dict['train'], self.gender_encoder)
+        dataset_dict['test'] = tensor_data(dataset_dict['test'], self.gender_encoder)
 
         super().__init__(train=dataset_dict['train'], test=dataset_dict['test'])
         self.dataset_dict = {'train': dataset_dict['train'], 'test': dataset_dict['test']} 
 
-    def __len__(self):
-        return sum(len(self.dataset_dict[key]) for key in self.dataset_dict)
+def tensor_data(data, gender_encoder):
+    mfccs = []
+    genders = []
+    
+    for data_entry in data:
+        wav_path = data_entry['wav_path']
+        gender = data_entry['gender']
 
-    def __getitem__(self, index):
-        data = self.dataset_dict[index]
-        mfccs = []
-        genders = []
-        
-        for data_entry in data:
-            wav_path = data_entry['wav_path']
-            gender = data_entry['gender']
+        waveform, sample_rate = torchaudio.load(wav_path)
 
-            waveform, sample_rate = torchaudio.load(wav_path)
+        mfcc_transform = MFCC(sample_rate=sample_rate, n_mfcc=13)
+        mfcc = mfcc_transform(waveform)
+        padded_mfcc = pad_mfcc(mfcc)
+        mfccs.append(padded_mfcc)
+        genders.append(gender)
 
-            mfcc_transform = MFCC(sample_rate=sample_rate, n_mfcc=13)
-            mfcc = mfcc_transform(waveform)
-            padded_mfcc = pad_mfcc(mfcc)
-            mfccs.append(padded_mfcc)
-            genders.append(gender)
+    gender_tensor = torch.tensor(gender_encoder.transform(genders), dtype=torch.long)
 
-        gender_tensor = torch.tensor(self.gender_encoder.transform(genders), dtype=torch.long)
+    # Create TensorDataset
+    tensor_dataset = TensorDataset(torch.stack(mfccs), gender_tensor)
 
-        # Create TensorDataset
-        tensor_dataset = TensorDataset(torch.stack(mfccs), gender_tensor)
-
-        return tensor_dataset
+    return tensor_dataset
 
 def preprocess_text(text):
     patterns_to_remove = [
