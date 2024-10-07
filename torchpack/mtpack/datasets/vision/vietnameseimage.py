@@ -54,8 +54,8 @@ class VietnameseImage(Dataset):
             super().__init__(train=train_dataset, val=val_dataset, test=test_dataset)
             self.dataset_dict = {'train': train_dataset, 'test': test_dataset, 'val': val_dataset} 
 
-    def __len__(self):
-        return len(self.dataset_dict)
+    # def __len__(self):
+    #     return len(self.dataset_dict)
 
-    def __getitem__(self, key):
-        return self.dataset_dict[key]
+    # def __getitem__(self, key):
+    #     return self.dataset_dict[key]
