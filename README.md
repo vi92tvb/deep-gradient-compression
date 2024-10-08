@@ -10,6 +10,7 @@
 ```
 
 ## Note for MACOS
+export PKG_CONFIG_PATH=/opt/homebrew/opt/libuv/lib/pkgconfig
 Macos must install libuv & tensorflow-macos & pkg-config first
 Imagenet dataset: `curl -O https://image-net.org/data/ILSVRC/2012/ILSVRC2012_devkit_t12.tar.gz``
 pip install setuptools==58.2.0
