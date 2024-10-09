@@ -1,3 +1,4 @@
+import jiwer
 import argparse
 import math
 import os
@@ -275,7 +276,6 @@ def train(model, loader, device, epoch, sampler, criterion, optimizer,
 
     sampler.set_epoch(epoch)
     model.train()
-    
 
     for step, (inputs, targets) in enumerate(tqdm(
             loader, desc='train', ncols=0, disable=quiet)):
@@ -288,6 +288,8 @@ def train(model, loader, device, epoch, sampler, criterion, optimizer,
         targets = targets.to(device, non_blocking=True)
         optimizer.zero_grad()
 
+        total_wer = 0.0  # Initialize total WER for this step
+
         loss = torch.tensor([0.0])
         for b in range(0, step_size, batch_size):
             _inputs = inputs[b:b+batch_size]
@@ -297,15 +299,20 @@ def train(model, loader, device, epoch, sampler, criterion, optimizer,
             _loss.mul_(_r_num_batches_per_step)
             _loss.backward()
             loss += _loss.item()
+
+            # wer = calculate_wer(_outputs, _targets)
+            # total_wer += wer
+
         optimizer.step()
 
         # write train loss log
         loss = hvd.allreduce(loss, name='loss').item()
-        perplexity = torch.exp(torch.tensor(loss, device=device)).item()
+        total_wer = hvd.allreduce(total_wer, name='wer').item()  # Synchronize WER across processes
+
         if writer is not None:
             num_inputs += step_size * hvd.size()
             writer.add_scalar('loss/train', loss, num_inputs)
-            writer.add_scalar('perplexity/train', perplexity, num_inputs)
+            # writer.add_scalar('wer/train', total_wer, num_inputs)  # Log WER
 
 def evaluate(model, loader, device, meters, split='test', quiet=True):
     _meters = {}
@@ -420,6 +427,29 @@ def printr(*args, **kwargs):
     if hvd.rank() == 0:
         print(*args, **kwargs)
 
+
+def calculate_wer(predictions, targets):
+    """
+    Calculate Word Error Rate (WER) between predictions and targets.
+    
+    Args:
+        predictions (torch.Tensor): Model predictions, expected to be a list of strings or tokens.
+        targets (torch.Tensor): Ground truth labels, expected to be a list of strings or tokens.
+    
+    Returns:
+        float: The calculated WER.
+    """
+    pred_texts = [decode_prediction(p) for p in predictions]
+    target_texts = [decode_target(t) for t in targets]
+
+    wer = jiwer.wer(target_texts, pred_texts)
+    return wer
+
+def decode_prediction(pred):
+    return " ".join([str(i.item()) for i in pred])
+
+def decode_target(target):
+    return " ".join([str(i.item()) for i in target])
 
 if __name__ == '__main__':
     hvd.init()
