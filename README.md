@@ -1,20 +1,20 @@
-# Deep Gradient Compression [[arXiv]](https://arxiv.org/pdf/1712.01887.pdf)
+# Deep Gradient Compression on Vietnamese Dataset
 
+### This source code is modified to use Vietnamese datasets for DGC
+
+## Note for MACOS user
+Macos must install libuv & tensorflow-macos & pkg-config first \
 ```
-@inproceedings{lin2018dgc,
-  title={{Deep Gradient Compression: Reducing the communication bandwidth for distributed training}},
-  author={Lin, Yujun and Han, Song and Mao, Huizi and Wang, Yu and Dally, William J},
-  booktitle={The International Conference on Learning Representations},
-  year={2018}
-}
+brew install libuv pkg-config
+pip install tensorflow-macos
 ```
 
-## Note for MACOS
-export PKG_CONFIG_PATH=/opt/homebrew/opt/libuv/lib/pkgconfig
-Macos must install libuv & tensorflow-macos & pkg-config first
-Imagenet dataset: `curl -O https://image-net.org/data/ILSVRC/2012/ILSVRC2012_devkit_t12.tar.gz``
-pip install setuptools==58.2.0
-HOROVOD_WITH_PYTORCH=1 pip install --no-cache-dir horovod  
+Then run command `export PKG_CONFIG_PATH=/opt/homebrew/opt/libuv/lib/pkgconfig` \
+
+Then install setuptoools: `pip install setuptools==58.2.01` \
+
+Require g++ version:
+
 ```
 g++ --version
     Configured with: --prefix=/Library/Developer/CommandLineTools/usr --with-gxx-include-dir=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/4.2.1
@@ -24,38 +24,26 @@ g++ --version
     InstalledDir: /Library/Developer/CommandLineTools/usr/bin
 ```
 
-## Overview
-
-We release the PyTorch code of the [Deep Gradient Compression](https://arxiv.org/pdf/1712.01887.pdf).
-
-<p align="left">
-<img src="data/docs/teaser.png" width="1080"><br/>
- Figure 1. Deep Gradient Compression (DGC) can reduce the communication bandwidth (transmit less gradients by pruning away small gradients), improve the scalability, and speed up distributed training.<br/><br/>
-  
-<img src="data/docs/cifar-10.png" width="1080">
-<img src="data/docs/resnet.png" width="1080"><br/>
- Figure 2. : DGC maintains accuracy: Learning curves of ResNet (the gradient sparsity is 99.9%).<br/><br/>
- 
-<img src="data/docs/speedup.png" width="640"><br/>
- Figure 3. DGC improves the scalability: speedup measured on NVIDIA TITAN RTX 2080Ti GPU cluster with 25 Gbps Ethernet.<br/><br/>
-</p>
-
 ## Content
 - [Prerequisites](#prerequisites)
 - [Code](#code)
+- [Dataset](#dataset)
 - [Training](#training)
-- [Known Issues and TODOs](#known-issues-and-todos)
 
 ## Prerequisites
 
 The code is built with following libraries (see [requirements.txt](requirements.txt)):
 - Python >= 3.7
 - [PyTorch](https://github.com/pytorch/pytorch) >= 1.5
-- [Horovod](https://github.com/horovod/horovod) >= 0.19.4
+- [Horovod](https://github.com/horovod/horovod) == 0.28.4
 - [numpy](https://github.com/numpy/numpy)
 - [tensorboardX](https://github.com/lanpa/tensorboardX) >= 1.2
 - [tqdm](https://github.com/tqdm/tqdm)
-- [openmpi](https://www.open-mpi.org/software/ompi/) >= 4.0
+- [openmpi](https://www.open-mpi.org/software/ompi/) == 5.0.5
+- torchvision == 0.12.0
+- torchtext == 0.12.0
+- torchaudio == 0.11.0
+- torch == 1.11.0
 
 ## Code
 
@@ -85,6 +73,13 @@ The core code to implement DGC is in [dgc/compression.py](dgc/compression.py) an
     mask = torch.ge(importance, threshold)
     indices = mask.nonzero().view(-1)
 ```
+
+## Dataset
+Download dataset at: `https://drive.google.com/drive/folders/138HHR0pFgAdry57rKCYqEutTV31lUhDa?usp=sharing`
+All dataset need to be extracted and located in `data` folder. In `data` folder has 3 sub-folders:
+- `vietnameseaudio`: contains audios data
+- `vietnameseimage`: contains images data
+- `vietnamesetext`: contains text data
 
 ## Training
 We use [Horovod](https://github.com/horovod/horovod) to run distributed training:
@@ -119,16 +114,6 @@ mpirun -np 32 -H server0:8,server1:8,server2:8,server3:8 \
 ```
 For more information on horovodrun, please read horovod documentations.
 
-You can modify/add new config files under [configs](configs) to change training settings. You can also modify some trivial configs in the command:
-```bash
-python train.py --configs [config files] --[config name] [config value] --suffix [suffix of experiment directory]
-```
-e.g.,
-```bash
-horovodrun -np 8 python train.py --configs configs/cifar/resnet20.py \
-    configs/dgc/wm5.py --configs.train.num_epochs 500 --suffix .e500
-```
-
 Here are some reproduce results using **0.1%** compression ratio (*i.e.*, `configs.train.compression.compress_ratio = 0.001`):
 | #GPUs | Batch Size | #Sparsified Nodes | ResNet-50 | VGG-16-BN | LR Scheduler |
 |:-----:|:----------:|:-----------------:|:---------:|:---------:|:------------:|
@@ -141,16 +126,6 @@ Here are some reproduce results using **0.1%** compression ratio (*i.e.*, `confi
 | 64    | 2048       | 8                 |   76.6    |   73.8    | Cosine       |
 | 128   | 4096       | 16                |   76.4    |   73.1    | Cosine       |
 | 256   | 8192       | 32                |   75.9    |   71.7    | Cosine       |
-
-## Known Issues and TODOs
-
-- **Backend**: We currently only support OpenMPI backend. We encountered some errors when calling `allgather` using NCCL2 backend: `allgather`ed data are random data once in a while; if we set `CUDA_LAUNCH_BLOCKING=1` for debugging, everything works well.
-- **#Sparsified Nodes**: We currently treat each GPU as an independent node. However, communication is rarely a bottleneck within one machine. A better strategy should be performing `allreduce` dense gradients intra-machine and `allgather` sparse gradients inter-machines. 
-  - For accuracy/convergence verification, we can simulate this by setting `configs.train.num_batches_per_step` to desired #GPUs per machine (see accuracy table for batch size = 4096/8192).
-- **Sparsification Granularity**: We naively perform fine-grained (*i.e.*, element-wise) top-k to select gradients, and thus the communication will suffer from increased `allgather` data volume as #nodes increases.
-  - [Sun *et.al.*](https://arxiv.org/pdf/1902.06855.pdf) modified the process with coarse-grained sparsification: gradients are partioned into chunks, `allreduce` the gradient chunks selected based on `allreduce`d L1-norm of each chunk, which gets rid of the `allgather` and solves the problem.
-- **Data Encoding**: We did not perform any data quantization/encoding before transmission. Data encoding can further reduce data volume.
-- **Overhead**: Performing sparsification (esp. adapting thresholding) in C/C++ may further reduce the DGC overhead.
 
 ## License
 
