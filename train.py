@@ -34,22 +34,22 @@ def main():
     Config.update_from_modules(*args.configs)
     Config.update_from_arguments(*opts)
 
-    # if args.devices is not None and args.devices != 'cpu':
-    #     configs.device = 'cuda'
+    if args.devices is not None and args.devices != 'cpu':
+        configs.device = 'cuda'
         # Horovod: pin GPU to local rank.
-        # torch.cuda.set_device(hvd.local_rank())
-    #     cudnn.benchmark = True
-    # else:
-        # configs.device = 'cpu'
-    configs.device = 'cpu'
+        torch.cuda.set_device(hvd.local_rank())
+        cudnn.benchmark = True
+    else:
+        configs.device = 'cpu'
+    # configs.device = 'cpu'
 
     if 'seed' in configs and configs.seed is not None:
         random.seed(configs.seed)
         np.random.seed(configs.seed)
         torch.manual_seed(configs.seed)
-        # if configs.device == 'cuda' and configs.get('deterministic', True):
-        #     cudnn.deterministic = True
-        #     cudnn.benchmark = False
+        if configs.device == 'cuda' and configs.get('deterministic', True):
+            cudnn.deterministic = True
+            cudnn.benchmark = False
     
     configs.train.num_batches_per_step = \
         configs.train.get('num_batches_per_step', 1)
@@ -82,9 +82,9 @@ def main():
     dataset = configs.dataset()
     # Horovod: limit # of CPU threads to be used per worker.
     torch.set_num_threads(configs.data.num_threads_per_worker)
-    # loader_kwargs = {'num_workers': configs.data.num_threads_per_worker,
-    #                  'pin_memory': True} if configs.device == 'cuda' else {}
-    loader_kwargs = {}
+    loader_kwargs = {'num_workers': configs.data.num_threads_per_worker,
+                     'pin_memory': True} if configs.device == 'cuda' else {}
+    # loader_kwargs = {}
     # When supported, use 'forkserver' to spawn dataloader workers
     # instead of 'fork' to prevent issues with Infiniband implementations
     # that are not fork-safe
@@ -112,7 +112,10 @@ def main():
     printr(f'\n==> creating model "{configs.model}"')
     model = configs.model()
     # model = model.cuda()
-    model = model.cpu()
+    if configs.device == 'cuda':
+        model = model.cuda()
+    else:
+        model = model.cpu()
 
     criterion = configs.train.criterion().to(configs.device)
     # Horovod: scale learning rate by the number of GPUs.
