@@ -279,7 +279,7 @@ def train(model, loader, device, epoch, sampler, criterion, optimizer,
 
     sampler.set_epoch(epoch)
     model.train()
-    for step, (inputs, targets) in enumerate(tqdm(
+    for step, (inputs, attention_mask, targets) in enumerate(tqdm(
             loader, desc='train', ncols=0, disable=quiet)):
         adjust_learning_rate(scheduler, epoch=epoch, step=step,
                              num_steps_per_epoch=num_steps_per_epoch,
@@ -288,14 +288,14 @@ def train(model, loader, device, epoch, sampler, criterion, optimizer,
 
         inputs = inputs.to(device, non_blocking=True)
         targets = targets.to(device, non_blocking=True)
+        attention_mask = attention_mask.to(device, non_blocking=True)
         optimizer.zero_grad()
-        tokenizer = AutoTokenizer.from_pretrained("vinai/phobert-base-v2")
 
         loss = torch.tensor([0.0])
         for b in range(0, step_size, batch_size):
             _inputs = inputs[b:b+batch_size]
             _targets = targets[b:b+batch_size]
-            _attention_mask = (_inputs != tokenizer.pad_token_id).long()  # Ensure to replace `padding_token_id` with your actual padding ID.
+            _attention_mask = attention_mask[b:b+batch_size]
             _outputs = model(_inputs, _attention_mask)
             _loss = criterion(_outputs, _targets)
             _loss.mul_(_r_num_batches_per_step)
@@ -320,21 +320,14 @@ def evaluate(model, loader, device, meters, split='test', quiet=True):
     tokenizer = AutoTokenizer.from_pretrained("vinai/phobert-base-v2")
 
     with torch.no_grad():
-        for inputs, targets in tqdm(loader, desc=split, ncols=0, disable=quiet):
+        for inputs, attention_mask, targets in tqdm(loader, desc=split, ncols=0, disable=quiet):
             raw_inputs = inputs
             inputs = raw_inputs.to(device, non_blocking=True)
             targets = targets.to(device, non_blocking=True)
-            # attention_mask =  make_mask(raw_inputs).to(device, non_blocking=True)
-            attention_mask = (inputs != tokenizer.pad_token_id).to(device, non_blocking=True)
+            attention_mask = attention_mask.to(device, non_blocking=True)
+            # attention_mask = (inputs != tokenizer.pad_token_id).to(device, non_blocking=True)
 
-            # Kiểm tra chiều của `inputs` và `attention_mask`
-            # print(f'Inputs shape: {inputs.shape}')
-            # print(f'Attention mask shape: {attention_mask.shape}')
-            # print(f'Targets shape: {targets.shape}')
-                
             outputs = model(input_ids=inputs, attention_mask=attention_mask)
-
-            print(f'Outputs shape: {outputs.shape}')
             for meter in meters.values():
                 meter.update(outputs, targets)
 
@@ -427,13 +420,12 @@ def printr(*args, **kwargs):
     if hvd.rank() == 0:
         print(*args, **kwargs)
 
-# def make_mask(batch_ids):
-#     batch_mask = []
-#     for ids in batch_ids:
-#         mask = [int(token_id > 0) for token_id in ids]
-#         batch_mask.append(mask)
-#     return torch.tensor(batch_mask)
-
+def make_mask(batch_ids):
+    batch_mask = []
+    for ids in batch_ids:
+        mask = [int(token_id > 0) for token_id in ids]
+        batch_mask.append(mask)
+    return torch.tensor(batch_mask)
 
 if __name__ == '__main__':
     hvd.init()
